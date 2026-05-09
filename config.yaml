@@ -6,11 +6,10 @@ graphqlSchema:  # These reads GraphQL schemas to define the schema of database/t
   files: '*.graphql' # looks for these files
   # path: / # exported queries are on the root path by default
 jsResource: # Loads JavaScript modules such that their exports are exported as resources
-  files: resources.js # the entry module for resources
+  files:
+    - resources.js
+    - routes/index.js
   # path: / # exported resources are on the root path by default, like http://server/resource-name
-fastifyRoutes: # This loads files that define fastify routes using fastify's auto-loader
-  files: routes/*.cjs # specify the location of route definition modules
-  path: . # relative to the app-name, like  http://server/app-name/route-name
 static: # This allows static files to be directly accessible
   root: web
   files: web/**
