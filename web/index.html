@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Title</title>
+    <link rel="icon" href="Harper-DogReg.svg" />
+    <link rel="stylesheet" href="style.css" />
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const messageEventTypes = ['message', 'put', 'delete'];
+            let source = new EventSource('/Topic/');
+
+            const eventsList = document.getElementById('serverSentEventsList');
+
+            function addEventHandler(type) {
+                source.addEventListener(type, console.log); //NOTE - Logging the raw event to the console
+                source.addEventListener(type, event => {
+                    const li = document.createElement('li');
+                    const parsedData = JSON.parse(event.data);
+                    li.insertAdjacentHTML('beforeend', `
+                        <strong>${type}:</strong> 
+                        <br /> 
+                        <code>${JSON.stringify(parsedData, null, 2)}</code>
+                        <hr />
+                    `);
+                    eventsList.appendChild(li);
+                }); //NOTE - This is where we are parsing the event data and displaying it in a more readable format in the UI.
+            }
+
+            messageEventTypes.forEach(addEventHandler);
+        });
+    </script>
+</head>
+
+<body>
+    <section class="center">
+        <img src="Harper-DogReg.svg" alt="Harper Logo" class="logo" />
+    </section>
+    <section class="center">
+        <h1>Get Started</h1>
+        <ul id="serverSentEventsList">
+        </ul>
+    </section>
+    <section class="center">
+        <h2>Documentation</h2>
+        <div class="action-button-links">
+            <a href="https://www.harper.fast/" target="_blank" rel="noopener">
+                <img class="icon-logo" src="Harper-DogReg.svg" alt="Harper Logo" />
+                Explore Harper
+            </a>
+            <a href="https://docs.harperdb.io/learn" target="_blank" rel="noopener">
+                <img class="icon-logo" src="book.svg" alt="Book Icon" />
+                Learn More</a>
+        </div>
+
+    </section>
+</body>
+
+</html>
