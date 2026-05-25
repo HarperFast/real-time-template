@@ -20,6 +20,16 @@ function basicAuth(username: string, password: string): string {
 suite('SSE real-time events', (ctx: ContextWithHarper) => {
   before(async () => {
     await setupHarperWithFixture(ctx, fixtureDir);
+    // Warm up the SSE subscription system by writing to the table first.
+    // Harper v5 real-time subscriptions on a table are only initialized after
+    // the first write, so an SSE connection before any writes will hang indefinitely.
+    const { admin, httpURL } = ctx.harper;
+    const auth = basicAuth(admin.username, admin.password);
+    await fetch(`${httpURL}/Topic/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: auth },
+      body: JSON.stringify({ name: '_warmup', category: '_warmup' }),
+    });
   });
 
   after(async () => {
@@ -103,7 +113,9 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
       headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify({ name: 'Delete SSE', category: 'sse-delete-test' }),
     });
-    const created = await createRes.json() as { id: string };
+    // Harper v5: id is in Location header, not response body
+    const createdLocation = createRes.headers.get('location');
+    const createdId = createdLocation!.split('/').pop()!;
 
     const ac = new AbortController();
     const timeoutId = setTimeout(() => ac.abort(), 15_000);
@@ -134,7 +146,7 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     })();
 
     // Delete the topic to trigger a delete event
-    const deleteRes = await fetch(`${httpURL}/Topic/${created.id}`, {
+    const deleteRes = await fetch(`${httpURL}/Topic/${createdId}`, {
       method: 'DELETE',
       headers: { Authorization: auth },
     });

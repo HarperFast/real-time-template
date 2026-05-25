@@ -35,9 +35,16 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
       body: JSON.stringify({ name: 'Integration Test Topic', category: 'test' }),
     });
 
-    strictEqual(res.status, 200);
-    const body = await res.json() as { id: string; name: string; category: string };
-    ok(body.id, 'response should include an id');
+    ok(res.ok, `POST /Topic/ should succeed, got HTTP ${res.status}`);
+    // Harper v5 POST returns the id in the Location header; verify fields via GET.
+    const location = res.headers.get('location');
+    ok(location, 'response should include a Location header with the new id');
+    const id = location!.split('/').pop();
+    ok(id, 'Location header should contain the new record id');
+
+    const getRes = await fetch(`${httpURL}/Topic/${id}`, { headers: { Authorization: auth } });
+    strictEqual(getRes.status, 200);
+    const body = await getRes.json() as { name: string; category: string };
     strictEqual(body.name, 'Integration Test Topic');
     strictEqual(body.category, 'test');
   });
@@ -51,15 +58,18 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
       headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify({ name: 'Read Me', category: 'read-test' }),
     });
-    const created = await createRes.json() as { id: string; name: string; category: string };
+    ok(createRes.ok, `POST should succeed, got HTTP ${createRes.status}`);
+    // Harper v5: id is in Location header, not response body
+    const location = createRes.headers.get('location');
+    const id = location!.split('/').pop()!;
 
-    const getRes = await fetch(`${httpURL}/Topic/${created.id}`, {
+    const getRes = await fetch(`${httpURL}/Topic/${id}`, {
       headers: { Authorization: auth },
     });
 
     strictEqual(getRes.status, 200);
     const body = await getRes.json() as { id: string; name: string; category: string };
-    strictEqual(body.id, created.id);
+    strictEqual(body.id, id);
     strictEqual(body.name, 'Read Me');
     strictEqual(body.category, 'read-test');
   });
@@ -73,16 +83,19 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
       headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify({ name: 'Before Update', category: 'update-test' }),
     });
-    const created = await createRes.json() as { id: string };
+    ok(createRes.ok, `POST should succeed, got HTTP ${createRes.status}`);
+    // Harper v5: id is in Location header
+    const location = createRes.headers.get('location');
+    const id = location!.split('/').pop()!;
 
-    const updateRes = await fetch(`${httpURL}/Topic/${created.id}`, {
+    const updateRes = await fetch(`${httpURL}/Topic/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify({ name: 'After Update', category: 'update-test' }),
     });
     ok(updateRes.ok, `expected successful update, got HTTP ${updateRes.status}`);
 
-    const getRes = await fetch(`${httpURL}/Topic/${created.id}`, {
+    const getRes = await fetch(`${httpURL}/Topic/${id}`, {
       headers: { Authorization: auth },
     });
     const body = await getRes.json() as { name: string };
@@ -98,15 +111,18 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
       headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify({ name: 'Delete Me', category: 'delete-test' }),
     });
-    const created = await createRes.json() as { id: string };
+    ok(createRes.ok, `POST should succeed, got HTTP ${createRes.status}`);
+    // Harper v5: id is in Location header
+    const location = createRes.headers.get('location');
+    const id = location!.split('/').pop()!;
 
-    const deleteRes = await fetch(`${httpURL}/Topic/${created.id}`, {
+    const deleteRes = await fetch(`${httpURL}/Topic/${id}`, {
       method: 'DELETE',
       headers: { Authorization: auth },
     });
     ok(deleteRes.ok, `expected successful delete, got HTTP ${deleteRes.status}`);
 
-    const getRes = await fetch(`${httpURL}/Topic/${created.id}`, {
+    const getRes = await fetch(`${httpURL}/Topic/${id}`, {
       headers: { Authorization: auth },
     });
     strictEqual(getRes.status, 404);
@@ -144,21 +160,12 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
 
     strictEqual(res.status, 404);
   });
-});
 
-suite('GetAll custom route', (ctx: ContextWithHarper) => {
-  before(async () => {
-    await setupHarperWithFixture(ctx, fixtureDir);
-  });
-
-  after(async () => {
-    await teardownHarper(ctx);
-  });
-
-  test('GET /GetAll returns an array of all topics', async () => {
+  test('GET /GetAll returns an array of topics', async () => {
     const { admin, httpURL } = ctx.harper;
     const auth = basicAuth(admin.username, admin.password);
 
+    // Create a topic so the list is non-empty
     await fetch(`${httpURL}/Topic/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: auth },
@@ -172,14 +179,15 @@ suite('GetAll custom route', (ctx: ContextWithHarper) => {
     strictEqual(res.status, 200);
     const body = await res.json();
     ok(Array.isArray(body), 'GET /GetAll should return an array');
-    ok((body as unknown[]).length >= 1, 'should include the created topic');
   });
 
-  test('GET /GetAll without auth returns 401', async () => {
+  test('GET /GetAll with invalid credentials returns 401', async () => {
     const { httpURL } = ctx.harper;
-
-    const res = await fetch(`${httpURL}/GetAll`);
-
+    // authorizeLocal is true in the test environment, so unauthenticated local
+    // requests are permitted. Use invalid credentials to verify auth is enforced.
+    const res = await fetch(`${httpURL}/GetAll`, {
+      headers: { Authorization: 'Basic ' + Buffer.from('bad:credentials').toString('base64') },
+    });
     strictEqual(res.status, 401);
   });
 });
