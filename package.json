@@ -1,11 +1,12 @@
 {
   "name": "application-template",
   "version": "1.0.0",
-  "description": "A template for building HarperDB applications",
+  "description": "A template for building Harper real-time applications",
   "type": "module",
   "scripts": {
     "start": "harper run .",
     "test": "harper-integration-test-run \"integrationTests/**/*.test.ts\"",
+    "test:integration": "harper-integration-test-run \"integrationTests/**/*.test.ts\"",
     "setup-loopback": "harper-integration-test-setup-loopback"
   },
   "dependencies": {
@@ -15,6 +16,7 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@harperfast/integration-testing": "^0.3.1",
-    "@types/node": "^25.9.0"
+    "@types/node": "^25.9.0",
+    "typescript": "^6.0.3"
   }
 }
