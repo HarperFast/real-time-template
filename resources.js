@@ -7,5 +7,6 @@ export class Topic extends tables.Topic {
 	async subscribe(options) {
 		if (!options.startTime) // return last five messages
 			options.previousCount = 5;
+		return super.subscribe(options);
 	}
 }
