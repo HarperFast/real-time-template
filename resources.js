@@ -1,4 +1,4 @@
-/** Here we can define any JavaScript-based resources and extensions to tables
+// Here we can define any JavaScript-based resources and extensions to tables
 
 import { tables } from 'harper';
 
@@ -9,4 +9,3 @@ export class Topic extends tables.Topic {
 			options.previousCount = 5;
 	}
 }
-**/
