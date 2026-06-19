@@ -1,6 +1,6 @@
 # Harper Real-Time Application Template
 
-This is a template for building [Harper](https://www.harper.fast/) real-time applications. You can download this repository as a starting point for building applications with Harper. To get started, make sure you have [installed Harper](https://docs.harper.fast/docs/install-harper), which can be quickly done with `npm install -g harper`. You can run your application from the directory where you downloaded the contents of this repository with:
+This is a template for building [Harper](https://www.harper.fast/) real-time applications. You can download this repository as a starting point for building applications with Harper. To get started, make sure you have [installed Harper](https://docs.harperdb.io/learn/getting-started/install-and-connect-harper), which can be quickly done with `npm install -g harper`. You can run your application from the directory where you downloaded the contents of this repository with:
 
 `harper run /path/to/your-app`
 
