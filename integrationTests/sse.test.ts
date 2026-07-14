@@ -6,23 +6,11 @@
 import { suite, test, before, after } from 'node:test';
 import { strictEqual, ok } from 'node:assert/strict';
 import { setupHarperWithFixture, teardownHarper, type ContextWithHarper } from '@harperfast/integration-testing';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-import { Buffer } from 'node:buffer';
+import { resolve } from 'node:path';
+import { basicAuth, collectFirstSseEvent, harperBinPath } from './helpers.ts';
 
-const require = createRequire(import.meta.url);
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 const fixtureDir = resolve(__dirname, '..');
-
-// harper's `exports` map only exposes ".", so the harness's default resolution of
-// 'harper/dist/bin/harper.js' throws ERR_PACKAGE_PATH_NOT_EXPORTED. Resolve the CLI
-// from the exported package root and pass it explicitly as harperBinPath.
-const harperBinPath = resolve(dirname(require.resolve('harper')), 'bin/harper.js');
-
-function basicAuth(username: string, password: string): string {
-  return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
-}
 
 suite('SSE real-time events', (ctx: ContextWithHarper) => {
   before(async () => {
@@ -79,20 +67,7 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const dec = new TextDecoder();
 
     // Collect stream data until we see a data event or abort fires
-    const eventPromise = (async (): Promise<string> => {
-      let buf = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          if (buf.includes('data:')) return buf;
-        }
-      } catch {
-        // AbortError when the controller fires — return whatever was buffered
-      }
-      return buf;
-    })();
+    const eventPromise = collectFirstSseEvent(reader, dec);
 
     // Trigger a put event by creating a topic
     const postRes = await fetch(`${httpURL}/Topic/`, {
@@ -114,19 +89,12 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const { admin, httpURL } = ctx.harper;
     const auth = basicAuth(admin.username, admin.password);
 
-    // Create the topic that will be deleted
-    const createRes = await fetch(`${httpURL}/Topic/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: auth },
-      body: JSON.stringify({ name: 'Delete SSE', category: 'sse-delete-test' }),
-    });
-    // Harper v5: id is in Location header, not response body
-    const createdLocation = createRes.headers.get('location');
-    const createdId = createdLocation!.split('/').pop()!;
-
     const ac = new AbortController();
     const timeoutId = setTimeout(() => ac.abort(), 15_000);
 
+    // 1. Open the SSE stream and start the reader loop FIRST. If we created/deleted the
+    // record before the reader was looping, the DELETE event could be emitted and missed,
+    // making the test hang for 15s or pass vacuously off the initial snapshot.
     const sseRes = await fetch(`${httpURL}/Topic/`, {
       headers: { Accept: 'text/event-stream', Authorization: auth },
       signal: ac.signal,
@@ -137,28 +105,26 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const reader = sseRes.body!.getReader();
     const dec = new TextDecoder();
 
-    const eventPromise = (async (): Promise<string> => {
-      let buf = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          if (buf.includes('data:')) return buf;
-        }
-      } catch {
-        // AbortError
-      }
-      return buf;
-    })();
+    const eventPromise = collectFirstSseEvent(reader, dec);
 
-    // Delete the topic to trigger a delete event
+    // 2. Now create the topic that will be deleted, then immediately delete it.
+    const createRes = await fetch(`${httpURL}/Topic/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: auth },
+      body: JSON.stringify({ name: 'Delete SSE', category: 'sse-delete-test' }),
+    });
+    ok(createRes.ok, `topic creation failed with HTTP ${createRes.status}`);
+    // Harper v5: id is in Location header, not response body
+    const createdLocation = createRes.headers.get('location');
+    const createdId = createdLocation!.split('/').pop()!;
+
     const deleteRes = await fetch(`${httpURL}/Topic/${createdId}`, {
       method: 'DELETE',
       headers: { Authorization: auth },
     });
     ok(deleteRes.ok, `topic deletion failed with HTTP ${deleteRes.status}`);
 
+    // 3. Await the event delivered on the already-open stream.
     const received = await eventPromise;
 
     clearTimeout(timeoutId);

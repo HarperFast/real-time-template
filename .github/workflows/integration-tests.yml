@@ -30,11 +30,17 @@ jobs:
 
       - name: Set Node versions
         id: set-node-versions
+        env:
+          # Bind the workflow_dispatch input to an env var and reference it as a shell
+          # variable below. Interpolating ${{ github.event.inputs.node-version }} directly
+          # into the run block is a shell-injection sink: `type: choice` only constrains the
+          # UI, not the workflow_dispatch API, so an attacker could submit an arbitrary value.
+          NODE_VERSION: ${{ github.event.inputs.node-version }}
         run: |
-          if [ "${{ github.event.inputs.node-version }}" == "all" ] || [ -z "${{ github.event.inputs.node-version }}" ]; then
-            echo "node-versions=[22, 24, 26]" >> $GITHUB_OUTPUT
+          if [ "$NODE_VERSION" == "all" ] || [ -z "$NODE_VERSION" ]; then
+            echo "node-versions=[22, 24, 26]" >> "$GITHUB_OUTPUT"
           else
-            echo "node-versions=[${{ github.event.inputs.node-version }}]" >> $GITHUB_OUTPUT
+            echo "node-versions=[$NODE_VERSION]" >> "$GITHUB_OUTPUT"
           fi
 
   integration-tests:

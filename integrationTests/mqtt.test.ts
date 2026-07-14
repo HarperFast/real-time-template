@@ -10,27 +10,18 @@
 import { suite, test, before, after } from 'node:test';
 import { strictEqual, ok } from 'node:assert/strict';
 import { setupHarperWithFixture, teardownHarper, type ContextWithHarper } from '@harperfast/integration-testing';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-import { Buffer } from 'node:buffer';
+import { resolve } from 'node:path';
 import { connectAsync, type MqttClient } from 'mqtt';
+import { basicAuth, harperBinPath } from './helpers.ts';
 
-const require = createRequire(import.meta.url);
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 const fixtureDir = resolve(__dirname, '..');
 
-// harper's `exports` map only exposes ".", so the harness's default resolution of
-// 'harper/dist/bin/harper.js' throws ERR_PACKAGE_PATH_NOT_EXPORTED. Resolve the CLI
-// from the exported package root and pass it explicitly as harperBinPath.
-const harperBinPath = resolve(dirname(require.resolve('harper')), 'bin/harper.js');
-
-// Default MQTT TCP port used by the integration-testing harness.
+// Default MQTT TCP port. The integration-testing harness isolates each Harper instance by
+// assigning it its own loopback IP (ctx.harper.hostname), not by remapping fixed ports, and
+// HarperContext exposes no MQTT port field — so the default 1883 on a per-instance hostname is
+// correct and collision-free for parallel runs.
 const MQTT_PORT = 1883;
-
-function basicAuth(username: string, password: string): string {
-  return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
-}
 
 /** Wait for the first message on `topicFilter`, or reject after `timeoutMs`. */
 function waitForMessage(
@@ -45,6 +36,10 @@ function waitForMessage(
     }, timeoutMs);
 
     function onMessage(topic: string, payload: Buffer) {
+      // Only resolve for the topic we subscribed to. `message` fires for every message
+      // the client receives, so without this guard a retained/warmup message on another
+      // topic (or a parallel run) could resolve the promise with the wrong payload.
+      if (topic !== topicFilter) return;
       clearTimeout(timer);
       client.removeListener('message', onMessage);
       resolvePromise({ topic, payload: payload.toString() });

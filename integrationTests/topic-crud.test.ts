@@ -6,22 +6,11 @@
 import { suite, test, before, after } from 'node:test';
 import { strictEqual, ok } from 'node:assert/strict';
 import { setupHarperWithFixture, teardownHarper, type ContextWithHarper } from '@harperfast/integration-testing';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import { basicAuth, harperBinPath } from './helpers.ts';
 
-const require = createRequire(import.meta.url);
 const __dirname = import.meta.dirname;
 const fixtureDir = resolve(__dirname, '..');
-
-// harper's `exports` map only exposes ".", so the harness's default resolution of
-// 'harper/dist/bin/harper.js' throws ERR_PACKAGE_PATH_NOT_EXPORTED. Resolve the CLI
-// from the exported package root and pass it explicitly as harperBinPath.
-const harperBinPath = resolve(dirname(require.resolve('harper')), 'bin/harper.js');
-
-function basicAuth(username: string, password: string): string {
-  return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
-}
 
 suite('Topic CRUD', (ctx: ContextWithHarper) => {
   before(async () => {

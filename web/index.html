@@ -17,14 +17,23 @@
             function addEventHandler(type) {
                 source.addEventListener(type, console.log); //NOTE - Logging the raw event to the console
                 source.addEventListener(type, event => {
+                    // A heartbeat or malformed frame would throw on JSON.parse; guard it so one
+                    // bad frame doesn't break the listener.
+                    let parsedData;
+                    try {
+                        parsedData = JSON.parse(event.data);
+                    } catch {
+                        return;
+                    }
+                    // Build the list item with textContent instead of insertAdjacentHTML. This is a
+                    // template developers copy from: injecting event data as HTML is a textbook XSS
+                    // sink the moment someone drops an untrusted field into the string.
                     const li = document.createElement('li');
-                    const parsedData = JSON.parse(event.data);
-                    li.insertAdjacentHTML('beforeend', `
-                        <strong>${type}:</strong> 
-                        <br /> 
-                        <code>${JSON.stringify(parsedData, null, 2)}</code>
-                        <hr />
-                    `);
+                    const strong = document.createElement('strong');
+                    strong.textContent = `${type}:`;
+                    const code = document.createElement('code');
+                    code.textContent = JSON.stringify(parsedData, null, 2);
+                    li.append(strong, document.createElement('br'), code, document.createElement('hr'));
                     eventsList.appendChild(li);
                 }); //NOTE - This is where we are parsing the event data and displaying it in a more readable format in the UI.
             }
