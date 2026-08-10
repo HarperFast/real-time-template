@@ -19,13 +19,20 @@ export function basicAuth(username: string, password: string): string {
 }
 
 /**
- * Reads from an SSE stream reader until a `data:` line is seen (or the stream ends /
- * the request is aborted), returning whatever was buffered. Centralizes the buffer-read
- * loop that the put and delete SSE tests both need.
+ * Reads from an SSE stream reader until an event of `eventType` is seen (or the stream ends /
+ * the request is aborted), returning whatever was buffered. Centralizes the buffer-read loop
+ * that the put and delete SSE tests both need.
+ *
+ * Matching on the event type matters: Harper prefixes each frame with `event: <type>` (the
+ * audit record's type — see harper's Table.ts subscribe / contentTypes.ts serialize), and a
+ * subscription delivers a `put` per existing record as its initial snapshot. A loop that
+ * stopped at the first `data:` line would therefore resolve off an unrelated snapshot event
+ * and pass even if delivery of the event under test had regressed.
  */
 export function collectFirstSseEvent(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   dec: TextDecoder,
+  eventType: string,
 ): Promise<string> {
   return (async () => {
     let buf = '';
@@ -34,7 +41,9 @@ export function collectFirstSseEvent(
         const { done, value } = await reader.read();
         if (done) break;
         buf += dec.decode(value, { stream: true });
-        if (buf.includes('data:')) return buf;
+        // `serialize` writes `event:` immediately followed by `data:`, so require both to
+        // have arrived — a frame split across chunks must not match on its header alone.
+        if (buf.includes(`event: ${eventType}\ndata:`)) return buf;
       }
     } catch {
       // AbortError when the controller fires — return whatever was buffered

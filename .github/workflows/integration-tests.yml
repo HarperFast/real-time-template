@@ -17,6 +17,11 @@ on:
           - '24'
           - '26'
 
+# Least privilege: these jobs only check out the repo, install, run tests and upload an
+# artifact on failure — none of which need write scope on the GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   generate-node-version-matrix:
     name: Generate Node Version Matrix

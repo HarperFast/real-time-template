@@ -1,15 +1,28 @@
 import { Resource, tables } from 'harper';
 
-// Example custom Resource. Note that because `Topic` is an @export'ed table, `GET /Topic/`
-// already lists records via the table's own read path — for a plain "list everything" endpoint
-// prefer that. This route is kept as a teaching example of a custom `get` handler.
-export class GetAll extends Resource {
+const DEFAULT_LIMIT = 100;
+
+/**
+ * Example custom Resource: a *bounded* listing of topics.
+ *
+ * `Topic` is an `@export`ed table, so `GET /Topic/` already lists records via the table's own
+ * read path — a bare `search({})` passthrough would just re-expose that at a second URL. What
+ * this adds is the reason to hand-roll a resource at all: it caps the result set, so a
+ * high-volume pub/sub log can't be materialized in full by a single request. Real apps should
+ * paginate properly (offset/cursor); this shows the guard rail, not a complete pager.
+ */
+export class TopicList extends Resource {
 	static get(target) {
-		// Bound the result set: an unbounded `search({})` materializes the entire Topic table,
-		// which is a memory hazard for a high-volume pub/sub log. Real apps should paginate.
-		// `target` is a RequestTarget (a parsed URLSearchParams) carrying the request, so we
-		// honor a caller-supplied `?limit=` instead of always returning everything.
-		const limit = target?.limit ?? 100;
+		// `target` is a RequestTarget (a parsed URLSearchParams), so honor a caller-supplied
+		// `?limit=` rather than always returning the same page size.
+		//
+		// Validate rather than `?? DEFAULT_LIMIT`: Harper's query parser coerces `limit` with a
+		// unary `+` (resources/search.ts), so `?limit=abc` yields NaN — not undefined — and `??`
+		// only substitutes on null/undefined. NaN would flow through to the slice end
+		// (`offset + limit`), whose termination check is `i >= end`; `i >= NaN` is always false,
+		// so the limit would be silently ignored and the entire table returned.
+		const requested = Number(target?.limit);
+		const limit = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : DEFAULT_LIMIT;
 		return tables.Topic.search({ limit });
 	}
 }

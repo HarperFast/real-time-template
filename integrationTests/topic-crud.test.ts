@@ -1,5 +1,5 @@
 /**
- * Verifies CRUD operations on the Topic REST API and the GetAll custom route.
+ * Verifies CRUD operations on the Topic REST API and the TopicList custom route.
  * Each test creates its own data and cleans up, so tests are independent and can
  * run in any order.
  */
@@ -35,7 +35,7 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     // Harper v5 POST returns the id in the Location header; verify fields via GET.
     const location = res.headers.get('location');
     ok(location, 'response should include a Location header with the new id');
-    const id = location!.split('/').pop();
+    const id = location.split('/').pop();
     ok(id, 'Location header should contain the new record id');
 
     const getRes = await fetch(`${httpURL}/Topic/${id}`, { headers: { Authorization: auth } });
@@ -57,7 +57,9 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     ok(createRes.ok, `POST should succeed, got HTTP ${createRes.status}`);
     // Harper v5: id is in Location header, not response body
     const location = createRes.headers.get('location');
-    const id = location!.split('/').pop()!;
+    ok(location, 'response should include a Location header with the new id');
+    const id = location.split('/').pop();
+    ok(id, 'Location header should contain the new record id');
 
     const getRes = await fetch(`${httpURL}/Topic/${id}`, {
       headers: { Authorization: auth },
@@ -82,7 +84,9 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     ok(createRes.ok, `POST should succeed, got HTTP ${createRes.status}`);
     // Harper v5: id is in Location header
     const location = createRes.headers.get('location');
-    const id = location!.split('/').pop()!;
+    ok(location, 'response should include a Location header with the new id');
+    const id = location.split('/').pop();
+    ok(id, 'Location header should contain the new record id');
 
     const updateRes = await fetch(`${httpURL}/Topic/${id}`, {
       method: 'PUT',
@@ -110,7 +114,9 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     ok(createRes.ok, `POST should succeed, got HTTP ${createRes.status}`);
     // Harper v5: id is in Location header
     const location = createRes.headers.get('location');
-    const id = location!.split('/').pop()!;
+    ok(location, 'response should include a Location header with the new id');
+    const id = location.split('/').pop();
+    ok(id, 'Location header should contain the new record id');
 
     const deleteRes = await fetch(`${httpURL}/Topic/${id}`, {
       method: 'DELETE',
@@ -157,7 +163,7 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     strictEqual(res.status, 404);
   });
 
-  test('GET /GetAll returns an array of topics', async () => {
+  test('GET /TopicList returns an array of topics', async () => {
     const { admin, httpURL } = ctx.harper;
     const auth = basicAuth(admin.username, admin.password);
 
@@ -165,23 +171,23 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     await fetch(`${httpURL}/Topic/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: auth },
-      body: JSON.stringify({ name: 'GetAll Topic', category: 'getall-test' }),
+      body: JSON.stringify({ name: 'TopicList Topic', category: 'topiclist-test' }),
     });
 
-    const res = await fetch(`${httpURL}/GetAll`, {
+    const res = await fetch(`${httpURL}/TopicList`, {
       headers: { Authorization: auth },
     });
 
     strictEqual(res.status, 200);
     const body = await res.json();
-    ok(Array.isArray(body), 'GET /GetAll should return an array');
+    ok(Array.isArray(body), 'GET /TopicList should return an array');
   });
 
-  test('GET /GetAll with invalid credentials returns 401', async () => {
+  test('GET /TopicList with invalid credentials returns 401', async () => {
     const { httpURL } = ctx.harper;
     // authorizeLocal is true in the test environment, so unauthenticated local
     // requests are permitted. Use invalid credentials to verify auth is enforced.
-    const res = await fetch(`${httpURL}/GetAll`, {
+    const res = await fetch(`${httpURL}/TopicList`, {
       headers: { Authorization: 'Basic ' + Buffer.from('bad:credentials').toString('base64') },
     });
     strictEqual(res.status, 401);

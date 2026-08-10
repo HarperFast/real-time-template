@@ -67,7 +67,7 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const dec = new TextDecoder();
 
     // Collect stream data until we see a data event or abort fires
-    const eventPromise = collectFirstSseEvent(reader, dec);
+    const eventPromise = collectFirstSseEvent(reader, dec, 'put');
 
     // Trigger a put event by creating a topic
     const postRes = await fetch(`${httpURL}/Topic/`, {
@@ -82,7 +82,10 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     clearTimeout(timeoutId);
     reader.cancel().catch(() => {});
 
-    ok(received.includes('data:'), 'SSE stream should deliver a data event after a topic is created');
+    ok(
+      received.includes('event: put\ndata:'),
+      `SSE stream should deliver a put event after a topic is created; got: ${received}`,
+    );
   });
 
   test('SSE stream delivers a delete event when a topic is deleted', async () => {
@@ -105,7 +108,7 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const reader = sseRes.body!.getReader();
     const dec = new TextDecoder();
 
-    const eventPromise = collectFirstSseEvent(reader, dec);
+    const eventPromise = collectFirstSseEvent(reader, dec, 'delete');
 
     // 2. Now create the topic that will be deleted, then immediately delete it.
     const createRes = await fetch(`${httpURL}/Topic/`, {
@@ -130,6 +133,9 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     clearTimeout(timeoutId);
     reader.cancel().catch(() => {});
 
-    ok(received.includes('data:'), 'SSE stream should deliver a data event after a topic is deleted');
+    ok(
+      received.includes('event: delete\ndata:'),
+      `SSE stream should deliver a delete event after a topic is deleted; got: ${received}`,
+    );
   });
 });
