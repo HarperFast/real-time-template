@@ -3,7 +3,7 @@
 import { tables } from 'harper';
 
 export class Topic extends tables.Topic {
-	// Custom subscribe handler, e.g. to replay recent messages to a new subscriber.
+	// Custom subscribe handler: the extension point for customizing a subscription.
 	//
 	// This overrides the INSTANCE method, not the static one. In v5 the static
 	// `Resource.subscribe` is a `transactional(...)` wrapper whose body is
@@ -14,19 +14,19 @@ export class Topic extends tables.Topic {
 	// replace that dispatcher and drop the transaction handling, so the instance method is
 	// the extension point.
 	//
-	// `previousCount` is supported in v5: it is declared on the subscription request
-	// (resources/ResourceInterface.ts) and consumed by the table subscribe path
-	// (resources/Table.ts). Harper rejects combining it with `startTime` for a table-level
-	// subscription, which is why it is only set when no `startTime` was requested.
+	// This deliberately does NOT seed history with `previousCount`. The option is declared
+	// on the subscription request, but the table-level path that services it is broken in
+	// harper 5.2.1: it reads the audit log with `auditStore.getRange({ start: 'z', ... })`
+	// (resources/Table.ts), passing a string start key to a numerically-keyed transaction
+	// log, so the subscription fails with "A number was expected" and the client never
+	// receives events. Clients that need replay should pass an explicit `startTime`, which
+	// Harper services on a separate code path.
 	//
 	// `options` defaults to `{}` so a subscriber connecting without any options doesn't hit
 	// a TypeError here before `super` gets a chance to normalize the request. Not `async`:
 	// there is nothing to await, so returning the parent's promise directly avoids a
 	// state-machine allocation on every subscription handshake.
 	subscribe(options = {}) {
-		if (!options.startTime)
-			// seed the last five messages when no explicit startTime is requested
-			options.previousCount = 5;
 		return super.subscribe(options);
 	}
 }
