@@ -18,22 +18,33 @@ export function basicAuth(username: string, password: string): string {
   return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 }
 
+export interface SseTableEvent {
+  id: string;
+  type: string;
+  value?: unknown;
+  localTime?: number;
+  version?: number;
+}
+
 /**
- * Reads from an SSE stream reader until an event of `eventType` is seen (or the stream ends /
- * the request is aborted), returning whatever was buffered. Centralizes the buffer-read loop
- * that the put and delete SSE tests both need.
+ * Reads an SSE stream until a table event of `eventType` ('put', 'delete', …) arrives,
+ * returning the parsed event (or `null` if the stream ends / the request is aborted first).
  *
- * Matching on the event type matters: Harper prefixes each frame with `event: <type>` (the
- * audit record's type — see harper's Table.ts subscribe / contentTypes.ts serialize), and a
- * subscription delivers a `put` per existing record as its initial snapshot. A loop that
- * stopped at the first `data:` line would therefore resolve off an unrelated snapshot event
- * and pass even if delivery of the event under test had regressed.
+ * Matching on the type matters: a table subscription delivers a `put` per already-existing
+ * record as its initial snapshot, so a loop that stopped at the first `data:` line would
+ * resolve off an unrelated snapshot event and pass even if delivery of the event under test
+ * had regressed.
+ *
+ * Harper does not put the type in an `event:` header for these frames. `serialize`
+ * (harper server/serverHelpers/contentTypes.ts) only lifts `type` into `event:` for messages
+ * carrying a `timestamp`; table subscription events carry `localTime`/`version` instead, so
+ * the whole event object is serialized as one `data:` line with `type` inside the JSON.
  */
-export function collectFirstSseEvent(
+export function collectSseEvent(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   dec: TextDecoder,
   eventType: string,
-): Promise<string> {
+): Promise<SseTableEvent | null> {
   return (async () => {
     let buf = '';
     try {
@@ -41,13 +52,23 @@ export function collectFirstSseEvent(
         const { done, value } = await reader.read();
         if (done) break;
         buf += dec.decode(value, { stream: true });
-        // `serialize` writes `event:` immediately followed by `data:`, so require both to
-        // have arrived — a frame split across chunks must not match on its header alone.
-        if (buf.includes(`event: ${eventType}\ndata:`)) return buf;
+        // Only consider complete lines; a frame split across chunks must not be parsed early.
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          let parsed: SseTableEvent;
+          try {
+            parsed = JSON.parse(line.slice('data:'.length));
+          } catch {
+            continue; // heartbeat or non-JSON frame
+          }
+          if (parsed?.type === eventType) return parsed;
+        }
       }
     } catch {
-      // AbortError when the controller fires — return whatever was buffered
+      // AbortError when the controller fires
     }
-    return buf;
+    return null;
   })();
 }

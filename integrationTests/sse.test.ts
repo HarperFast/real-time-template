@@ -7,7 +7,7 @@ import { suite, test, before, after } from 'node:test';
 import { strictEqual, ok } from 'node:assert/strict';
 import { setupHarperWithFixture, teardownHarper, type ContextWithHarper } from '@harperfast/integration-testing';
 import { resolve } from 'node:path';
-import { basicAuth, collectFirstSseEvent, harperBinPath } from './helpers.ts';
+import { basicAuth, collectSseEvent, harperBinPath } from './helpers.ts';
 
 const __dirname = import.meta.dirname;
 const fixtureDir = resolve(__dirname, '..');
@@ -67,7 +67,7 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const dec = new TextDecoder();
 
     // Collect stream data until we see a data event or abort fires
-    const eventPromise = collectFirstSseEvent(reader, dec, 'put');
+    const eventPromise = collectSseEvent(reader, dec, 'put');
 
     // Trigger a put event by creating a topic
     const postRes = await fetch(`${httpURL}/Topic/`, {
@@ -82,10 +82,8 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     clearTimeout(timeoutId);
     reader.cancel().catch(() => {});
 
-    ok(
-      received.includes('event: put\ndata:'),
-      `SSE stream should deliver a put event after a topic is created; got: ${received}`,
-    );
+    ok(received, 'SSE stream should deliver a put event after a topic is created');
+    strictEqual(received.type, 'put');
   });
 
   test('SSE stream delivers a delete event when a topic is deleted', async () => {
@@ -108,7 +106,7 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     const reader = sseRes.body!.getReader();
     const dec = new TextDecoder();
 
-    const eventPromise = collectFirstSseEvent(reader, dec, 'delete');
+    const eventPromise = collectSseEvent(reader, dec, 'delete');
 
     // 2. Now create the topic that will be deleted, then immediately delete it.
     const createRes = await fetch(`${httpURL}/Topic/`, {
@@ -133,9 +131,8 @@ suite('SSE real-time events', (ctx: ContextWithHarper) => {
     clearTimeout(timeoutId);
     reader.cancel().catch(() => {});
 
-    ok(
-      received.includes('event: delete\ndata:'),
-      `SSE stream should deliver a delete event after a topic is deleted; got: ${received}`,
-    );
+    ok(received, 'SSE stream should deliver a delete event after a topic is deleted');
+    strictEqual(received.type, 'delete');
+    strictEqual(received.id, createdId, 'delete event should reference the deleted topic');
   });
 });
