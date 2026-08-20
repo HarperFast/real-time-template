@@ -1,6 +1,12 @@
-// Here we can define any JavaScript-based resources and extensions to tables
+// Here we can define any JavaScript-based resources and extensions to tables.
+//
+// This is the single entry module named by `jsResource.files` in config.yaml: Harper registers
+// this module's named exports as resources, so anything defined elsewhere (e.g. under routes/)
+// is re-exported from here rather than being picked up by a second glob.
 
 import { tables } from 'harper';
+
+export { TopicList } from './routes/index.js';
 
 export class Topic extends tables.Topic {
 	// Custom subscribe handler: the extension point for customizing a subscription.

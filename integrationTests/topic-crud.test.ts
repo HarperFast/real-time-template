@@ -12,6 +12,10 @@ import { basicAuth, harperBinPath } from './helpers.ts';
 const __dirname = import.meta.dirname;
 const fixtureDir = resolve(__dirname, '..');
 
+// Mirrors MAX_LIMIT in routes/index.js: the cap TopicList enforces on its result set.
+// Not imported, because routes/index.js imports 'harper', which only resolves inside the server.
+const TOPIC_LIST_MAX_LIMIT = 100;
+
 suite('Topic CRUD', (ctx: ContextWithHarper) => {
   before(async () => {
     await setupHarperWithFixture(ctx, fixtureDir, { harperBinPath });
@@ -181,6 +185,49 @@ suite('Topic CRUD', (ctx: ContextWithHarper) => {
     strictEqual(res.status, 200);
     const body = await res.json();
     ok(Array.isArray(body), 'GET /TopicList should return an array');
+  });
+
+  test('GET /TopicList bounds the result set regardless of the requested limit', async () => {
+    const { admin, httpURL } = ctx.harper;
+    const auth = basicAuth(admin.username, admin.password);
+
+    // Seed past the cap so an unenforced limit would come back larger than MAX_LIMIT.
+    const seeds = Array.from({ length: TOPIC_LIST_MAX_LIMIT + 1 }, (_, i) =>
+      fetch(`${httpURL}/Topic/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: auth },
+        body: JSON.stringify({ name: `Limit Cap ${i}`, category: 'limit-cap-test' }),
+      }),
+    );
+    for (const seedRes of await Promise.all(seeds)) {
+      ok(seedRes.ok, `seed POST /Topic/ should succeed, got HTTP ${seedRes.status}`);
+    }
+
+    const listLength = async (query: string): Promise<number> => {
+      const res = await fetch(`${httpURL}/TopicList${query}`, { headers: { Authorization: auth } });
+      strictEqual(res.status, 200, `GET /TopicList${query} should succeed`);
+      const body = await res.json() as unknown[];
+      ok(Array.isArray(body), `GET /TopicList${query} should return an array`);
+      return body.length;
+    };
+
+    // Harper's query syntax for a page size is the `limit(n)` function form; `?limit=n` is
+    // parsed as an attribute filter and never reaches the resource.
+    //
+    // A limit above the maximum is clamped, not honored — otherwise a single request can
+    // materialize the whole table, the hazard the resource exists to prevent. The seed above
+    // puts more than MAX_LIMIT rows in the table, so an unclamped limit would exceed it.
+    strictEqual(await listLength('?limit(1000000000)'), TOPIC_LIST_MAX_LIMIT, 'a limit above the max must be clamped');
+
+    // A non-numeric limit parses to NaN, and NaN as a slice end disables the bound entirely
+    // (`i >= NaN` is always false), so it must fall back to the maximum rather than pass through.
+    strictEqual(await listLength('?limit(abc)'), TOPIC_LIST_MAX_LIMIT, 'a non-numeric limit must fall back to the max');
+
+    // No limit at all also uses the maximum.
+    strictEqual(await listLength(''), TOPIC_LIST_MAX_LIMIT, 'an absent limit must use the max as the page size');
+
+    // A limit under the maximum is honored as-is.
+    strictEqual(await listLength('?limit(5)'), 5, 'a limit under the max should be honored');
   });
 
   test('GET /TopicList with invalid credentials returns 401', async () => {

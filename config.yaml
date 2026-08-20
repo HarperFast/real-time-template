@@ -6,9 +6,7 @@ graphqlSchema:  # These reads GraphQL schemas to define the schema of database/t
   files: '*.graphql' # looks for these files
   # path: / # exported queries are on the root path by default
 jsResource: # Loads JavaScript modules such that their exports are exported as resources
-  files:
-    - resources.js
-    - routes/**
+  files: resources.js # the single entry module; it re-exports everything under routes/
   # path: / # exported resources are on the root path by default, like http://server/resource-name
 static: # This allows static files to be directly accessible
   root: web
