@@ -1,4 +1,7 @@
 ### Node template
+# macOS
+.DS_Store
+
 # Logs
 logs
 *.log
